@@ -16,7 +16,9 @@
     AVAudioSession *audioSession;
     AUGraph auGraph;
     AudioUnit remoteIOUnit;
+    AudioUnit reverbUnit;
     AUNode remoteIONode;
+    AUNode reverbNode;
     AURenderCallbackStruct inputProc;
     BOOL isMute;
     
@@ -129,6 +131,18 @@ static OSStatus	PerformThru(
     CheckError (AUGraphAddNode(auGraph,&componentDesc,&remoteIONode),"couldn't add remote io node");
     CheckError(AUGraphNodeInfo(auGraph,remoteIONode,NULL,&remoteIOUnit),"couldn't get remote io unit from node");
     
+    AudioComponentDescription reverbDesc;
+    reverbDesc.componentType = kAudioUnitType_Effect;
+    reverbDesc.componentSubType = kAudioUnitSubType_Reverb2;
+    reverbDesc.componentManufacturer = kAudioUnitManufacturer_Apple;
+    reverbDesc.componentFlags = 0;
+    reverbDesc.componentFlagsMask = 0;
+    
+    CheckError (AUGraphAddNode(auGraph,&reverbDesc,&reverbNode),"couldn't add reverb node");
+    CheckError(AUGraphNodeInfo(auGraph,reverbNode,NULL,&reverbUnit),"couldn't get reverb unit from node");
+    
+    AUGraphConnectNodeInput(auGraph, reverbNode, 0, remoteIONode, 0);
+    
     //set BUS Remote I/O Unit是属於Audio Unit其中之一，也是与硬体有关的一个Unit，它分为输出端与输入端，输入端通常为 麦克风 ，输出端为 喇叭、耳机 …等
     //将Element 0的Output scope与喇叭接上，Element 1的Input scope与麦克风接上
     //然后通过AUGraph把Element 0和Element 1接上
@@ -141,13 +155,14 @@ static OSStatus	PerformThru(
                                     &oneFlag,
                                     sizeof(oneFlag)),"couldn't kAudioOutputUnitProperty_EnableIO with kAudioUnitScope_Output");
     //
+    /*
     UInt32 busOne = 1;
     CheckError(AudioUnitSetProperty(remoteIOUnit,
                                     kAudioOutputUnitProperty_EnableIO,
                                     kAudioUnitScope_Input,
                                     busOne,
                                     &oneFlag,
-                                    sizeof(oneFlag)),"couldn't kAudioOutputUnitProperty_EnableIO with kAudioUnitScope_Input");
+                                    sizeof(oneFlag)),"couldn't kAudioOutputUnitProperty_EnableIO with kAudioUnitScope_Input");*/
     //音频流描述AudioStreamBasicDescription
     AudioStreamBasicDescription effectDataFormat;
     UInt32 propSize = sizeof(effectDataFormat);
@@ -168,6 +183,20 @@ static OSStatus	PerformThru(
     CheckError(AudioUnitSetProperty(remoteIOUnit,
                                     kAudioUnitProperty_StreamFormat,
                                     kAudioUnitScope_Input,
+                                    0,
+                                    &effectDataFormat,
+                                    propSize),"couldn't set kAudioUnitProperty_StreamFormat with kAudioUnitScope_Input");
+    
+    CheckError(AudioUnitSetProperty(reverbUnit,
+                                    kAudioUnitProperty_StreamFormat,
+                                    kAudioUnitScope_Input,
+                                    0,
+                                    &effectDataFormat,
+                                    propSize),"couldn't set kAudioUnitProperty_StreamFormat with kAudioUnitScope_Input");
+    
+    CheckError(AudioUnitSetProperty(reverbUnit,
+                                    kAudioUnitProperty_StreamFormat,
+                                    kAudioUnitScope_Output,
                                     0,
                                     &effectDataFormat,
                                     propSize),"couldn't set kAudioUnitProperty_StreamFormat with kAudioUnitScope_Input");
